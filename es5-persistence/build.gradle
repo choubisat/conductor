@@ -1,4 +1,5 @@
 dependencies {
+
     compile project(':conductor-core')
 
     compile "commons-io:commons-io:${revCommonsIo}"
@@ -15,3 +16,7 @@ dependencies {
     testCompile "org.slf4j:slf4j-log4j12:${revSlf4jlog4j}"
     testCompile "org.awaitility:awaitility:${revAwaitility}"
 }
+// configurations {
+//     //compile.exclude group: 'com.adobe.asr'
+//     compile.exclude module: 'log4j-over-slf4j'
+// }

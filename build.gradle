@@ -19,10 +19,13 @@ ext.githubProjectName = rootProject.name // Change if github project name is not
 apply plugin: 'project-report'
 apply from: "$rootDir/versionsOfDependencies.gradle"
 
+
 allprojects {
     apply plugin: 'idea'
     apply plugin: 'jacoco'
     apply plugin: 'eclipse'
+    apply plugin: 'eclipse'
+    apply plugin: "com.jfrog.artifactory"
 
     repositories {
         jcenter()

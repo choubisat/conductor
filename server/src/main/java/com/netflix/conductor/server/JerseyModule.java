@@ -27,6 +27,10 @@ import javax.servlet.ServletException;
 import javax.servlet.ServletRequest;
 import javax.servlet.ServletResponse;
 import javax.servlet.http.HttpServletResponse;
+import javax.servlet.http.HttpServletRequest;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.jaxrs.json.JacksonJsonProvider;
@@ -36,6 +40,14 @@ import com.sun.jersey.api.core.ResourceConfig;
 import com.sun.jersey.guice.JerseyServletModule;
 import com.sun.jersey.guice.spi.container.servlet.GuiceContainer;
 
+//import com.adobe.asr.annotations.cors.CrossOriginResourceSharing;
+import com.adobe.asr.autoconfigure.ims.annotation.IMSServiceAuthContext;
+import com.adobe.asr.autoconfigure.ims.annotation.IMSServiceAuthentication;
+import com.adobe.asr.autoconfigure.ims.annotation.IMSUserAuthContext;
+import com.adobe.asr.autoconfigure.ims.annotation.IMSUserAuthentication;
+import com.adobe.asr.autoconfigure.ims.dto.IMSTokenInfo;
+import com.adobe.asr.commons.AsrHttpHeaders;
+
 /**
  * 
  * @author Viren
@@ -43,10 +55,12 @@ import com.sun.jersey.guice.spi.container.servlet.GuiceContainer;
  */
 public final class JerseyModule extends JerseyServletModule {
 
+	private static Logger logger = LoggerFactory.getLogger(JerseyModule.class);
 	
     @Override
     protected void configureServlets() {
     	filter("/*").through(apiOriginFilter());
+    	filter("/*").through(apiAuthFilter());
         
         Map<String, String> jerseyParams = new HashMap<>();	
 		jerseyParams.put("com.sun.jersey.config.feature.FilterForwardOn404", "true");
@@ -72,6 +86,7 @@ public final class JerseyModule extends JerseyServletModule {
 
 			@Override
 			public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain) throws IOException, ServletException {
+				logger.info("apiOriginFilter: doFilter: executing");
 		        HttpServletResponse res = (HttpServletResponse) response;
 		        if (!res.containsHeader("Access-Control-Allow-Origin")) {
 		            res.setHeader("Access-Control-Allow-Origin", "*");
@@ -85,6 +100,38 @@ public final class JerseyModule extends JerseyServletModule {
 			public void destroy() {}
         	
         };
+    }
+	
+	public class AuthFilter implements Filter{
+
+		@Override
+		public void init(FilterConfig filterConfig) throws ServletException {}
+
+		@Override
+		public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain) throws IOException, ServletException {
+			logger.info("apiAuthFilter: doFilter: executing");
+			HttpServletRequest httpReq = (HttpServletRequest) request;
+			String authHeader = httpReq.getHeader("Authorization");
+			String apiKey = httpReq.getHeader(AsrHttpHeaders.API_KEY);
+	        if ((authHeader != null && authHeader != "") 
+	        		&& (apiKey != null && apiKey != "")){
+	        	chain.doFilter(request, response);
+	        }
+	        else
+	        {
+	        	logger.info("No Authorization header. ");
+	        	HttpServletResponse httpResp = (HttpServletResponse)response;
+	        	httpResp.setStatus(HttpServletResponse.SC_FORBIDDEN);
+	        }
+	    }
+		@Override
+		public void destroy() {}
+    	
+    };
+	@Provides
+    @Singleton
+    public AuthFilter apiAuthFilter() {
+        return new AuthFilter();
     }
     @Override
     public boolean equals(Object obj) {

@@ -105,6 +105,7 @@ public class ModulesProvider implements Provider<List<AbstractModule>> {
         modules.add(new WorkflowExecutorModule());
 
         if (configuration.getJerseyEnabled()) {
+        	logger.info("JerseyModule: jersey was enabled");
             modules.add(new JerseyModule());
             modules.add(new SwaggerModule());
         }

@@ -22,6 +22,7 @@
   "dependencies": {
     "autoprefixer": "^6.0.0",
     "babel-polyfill": "^6.3.14",
+    "babel-register": "^6.26.0",
     "body-parser": "^1.18.3",
     "bunyan": "^1.7.1",
     "clipboard": "^1.6.1",
@@ -79,7 +80,7 @@
     "eslint-plugin-import": "^2.8.0",
     "eslint-plugin-jsx-a11y": "^6.0.3",
     "eslint-plugin-react": "^7.5.1",
-    "gulp": "^3.9.0",
+    "gulp": "^3.9.1",
     "gulp-babel": "^6.1.1",
     "gulp-eslint": "^5.0.0",
     "gulp-gh-pages": "^0.5.4",

@@ -26,8 +26,8 @@ RUN apk update && apk add \
 RUN mkdir -p /app/ui
 
 # Copy the ui files onto the image
-COPY ./docker/ui/bin /app
-COPY ./ui /app/ui
+COPY docker/ui/bin /app
+COPY ui /app/ui
 
 # Copy the files for the server into the app folders
 RUN chmod +x /app/startup.sh
