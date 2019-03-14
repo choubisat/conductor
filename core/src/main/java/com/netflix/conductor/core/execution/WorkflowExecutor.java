@@ -378,6 +378,8 @@ public class WorkflowExecutor {
         workflow.setEndTime(0);
         // Change the status to running
         workflow.setStatus(WorkflowStatus.RUNNING);
+        workflow.setOutput(null);
+        workflow.setExternalOutputPayloadStoragePath(null);
         executionDAOFacade.updateWorkflow(workflow);
         decide(workflowId);
     }
@@ -408,6 +410,11 @@ public class WorkflowExecutor {
             throw new ApplicationException(CONFLICT,
                     "There are no failed tasks! Use restart if you want to attempt entire workflow execution again.");
         }
+
+        // set workflow to RUNNING status
+        workflow.setStatus(WorkflowStatus.RUNNING);
+        executionDAOFacade.updateWorkflow(workflow);
+
         List<Task> rescheduledTasks = new ArrayList<>();
         failedTasks.forEach(failedTask -> rescheduledTasks.add(taskToBeRescheduled(failedTask)));
 
@@ -422,9 +429,7 @@ public class WorkflowExecutor {
         });
 
         scheduleTask(workflow, rescheduledTasks);
-
-        workflow.setStatus(WorkflowStatus.RUNNING);
-        executionDAOFacade.updateWorkflow(workflow);
+        dedupAndAddTasks(workflow, rescheduledTasks);
         executionDAOFacade.updateTasks(workflow.getTasks());
 
         decide(workflowId);
@@ -463,10 +468,7 @@ public class WorkflowExecutor {
         taskToBeRetried.setRetried(false);
         taskToBeRetried.setPollCount(0);
         taskToBeRetried.setCallbackAfterSeconds(0);
-
-        // update the failed task in the DAO
         task.setRetried(true);
-        executionDAOFacade.updateTask(task);
         return taskToBeRetried;
     }
 
@@ -489,6 +491,7 @@ public class WorkflowExecutor {
         Workflow workflow = executionDAOFacade.getWorkflowById(wf.getWorkflowId(), false);
 
         if (workflow.getStatus().equals(WorkflowStatus.COMPLETED)) {
+            queueDAO.remove(DECIDER_QUEUE, workflow.getWorkflowId());    //remove from the sweep queue
             executionDAOFacade.removeFromPendingWorkflow(workflow.getWorkflowName(), workflow.getWorkflowId());
             LOGGER.info("Workflow has already been completed.  Current status={}, workflowId= {}", workflow.getStatus(), wf.getWorkflowId());
             return;
@@ -535,8 +538,8 @@ public class WorkflowExecutor {
         Monitors.recordWorkflowCompletion(workflow.getWorkflowName(), workflow.getEndTime() - workflow.getStartTime(), wf.getOwnerApp());
         queueDAO.remove(DECIDER_QUEUE, workflow.getWorkflowId());    //remove from the sweep queue
 
-        if (wf.getWorkflowDefinition().isWorkflowStatusListenerEnabled()) {
-            workflowStatusListener.onWorkflowCompleted(wf);
+        if (workflow.getWorkflowDefinition().isWorkflowStatusListenerEnabled()) {
+            workflowStatusListener.onWorkflowCompleted(workflow);
         }
     }
 
@@ -656,7 +659,8 @@ public class WorkflowExecutor {
             workflowInstance = metadataMapperService.populateWorkflowWithDefinitions(workflowInstance);
         }
 
-        Task task = executionDAOFacade.getTaskById(taskResult.getTaskId());
+        Task task = Optional.ofNullable(executionDAOFacade.getTaskById(taskResult.getTaskId()))
+                .orElseThrow(() -> new ApplicationException(Code.NOT_FOUND, "No such task found by id: " + taskResult.getTaskId()));
 
         LOGGER.debug("Task: {} belonging to Workflow {} being updated", task, workflowInstance);
 
@@ -722,6 +726,7 @@ public class WorkflowExecutor {
             case CANCELED:
             case FAILED:
             case FAILED_WITH_TERMINAL_ERROR:
+            case TIMED_OUT:
                 queueDAO.remove(taskQueueName, taskResult.getTaskId());
                 LOGGER.debug("Task: {} removed from taskQueue: {} since the task status is {}", task, taskQueueName, task.getStatus().name());
                 break;
@@ -805,9 +810,10 @@ public class WorkflowExecutor {
             if (!tasksToBeRequeued.isEmpty()) {
                 addTaskToQueue(tasksToBeRequeued);
             }
-            workflow.getTasks().addAll(tasksToBeScheduled);
 
-            for (Task task : tasksToBeScheduled) {
+            tasksToBeScheduled = dedupAndAddTasks(workflow, tasksToBeScheduled);
+
+            for (Task task : outcome.tasksToBeScheduled) {
                 if (isSystemTask.and(isNonTerminalTask).test(task)) {
                     WorkflowSystemTask workflowSystemTask = WorkflowSystemTask.get(task.getTaskType());
 
@@ -826,8 +832,6 @@ public class WorkflowExecutor {
                 }
             }
 
-            stateChanged = scheduleTask(workflow, tasksToBeScheduled) || stateChanged;
-
             if (!outcome.tasksToBeUpdated.isEmpty()) {
                 for (Task task : tasksToBeUpdated) {
                     if (task.getStatus() != null && (!task.getStatus().equals(Task.Status.IN_PROGRESS)
@@ -837,11 +841,13 @@ public class WorkflowExecutor {
                 }
             }
 
-            if (!outcome.tasksToBeUpdated.isEmpty() || !outcome.tasksToBeScheduled.isEmpty()) {
+            if (!outcome.tasksToBeUpdated.isEmpty() || !tasksToBeScheduled.isEmpty()) {
                 executionDAOFacade.updateTasks(tasksToBeUpdated);
                 executionDAOFacade.updateWorkflow(workflow);
                 queueDAO.push(DECIDER_QUEUE, workflow.getWorkflowId(), config.getSweepFrequency());
             }
+
+            stateChanged = scheduleTask(workflow, tasksToBeScheduled) || stateChanged;
 
             if (stateChanged) {
                 decide(workflowId);
@@ -856,6 +862,20 @@ public class WorkflowExecutor {
             throw e;
         }
         return false;
+    }
+
+    @VisibleForTesting
+    List<Task> dedupAndAddTasks(Workflow workflow, List<Task> tasks) {
+        List<String> tasksInWorkflow = workflow.getTasks().stream()
+                .map(task -> task.getReferenceTaskName() + "_" + task.getRetryCount())
+                .collect(Collectors.toList());
+
+        List<Task> dedupedTasks = tasks.stream()
+                .filter(task -> !tasksInWorkflow.contains(task.getReferenceTaskName() + "_" + task.getRetryCount()))
+                .collect(Collectors.toList());
+
+        workflow.getTasks().addAll(dedupedTasks);
+        return dedupedTasks;
     }
 
     /**
@@ -959,6 +979,10 @@ public class WorkflowExecutor {
     public void executeSystemTask(WorkflowSystemTask systemTask, String taskId, int unackTimeout) {
         try {
             Task task = executionDAOFacade.getTaskById(taskId);
+            if (task == null){
+                LOGGER.error("TaskId: {} could not be found while executing SystemTask", taskId);
+                return;
+            }
             LOGGER.info("Task: {} fetched from execution DAO for taskId: {}", task, taskId);
             if (task.getStatus().isTerminal()) {
                 //Tune the SystemTaskWorkerCoordinator's queues - if the queue size is very big this can happen!
@@ -1219,6 +1243,16 @@ public class WorkflowExecutor {
         }
 
         if (rerunFromTask != null) {
+            // set workflow as RUNNING
+            workflow.setStatus(WorkflowStatus.RUNNING);
+            if (correlationId != null) {
+                workflow.setCorrelationId(correlationId);
+            }
+            if (workflowInput != null) {
+                workflow.setInput(workflowInput);
+            }
+            executionDAOFacade.updateWorkflow(workflow);
+
             // Remove all tasks after the "rerunFromTask"
             for (Task task : workflow.getTasks()) {
                 if (task.getSeq() > rerunFromTask.getSeq()) {
@@ -1239,15 +1273,6 @@ public class WorkflowExecutor {
             rerunFromTask.setExecuted(false);
             executionDAOFacade.updateTask(rerunFromTask);
 
-            // and set workflow as RUNNING
-            workflow.setStatus(WorkflowStatus.RUNNING);
-            if (correlationId != null) {
-                workflow.setCorrelationId(correlationId);
-            }
-            if (workflowInput != null) {
-                workflow.setInput(workflowInput);
-            }
-            executionDAOFacade.updateWorkflow(workflow);
             decide(workflowId);
             return true;
         }
