@@ -1,6 +1,7 @@
 buildscript {
     dependencies {
         classpath "org.akhikhl.gretty:gretty:1.2.4"
+        classpath "org.jfrog.buildinfo:build-info-extractor-gradle:4+"
     }
 }
 
@@ -14,11 +15,12 @@ configurations.all {
     }
 }
 
+apply plugin : 'java'
+apply plugin : 'eclipse'
 apply plugin: 'war'
 apply plugin: "org.akhikhl.gretty"
 
 dependencies {
-
     //Conductor
     compile project(':conductor-core')
     compile project(':conductor-jersey')
@@ -41,7 +43,21 @@ dependencies {
 
     //Swagger
     compile "io.swagger:swagger-jersey-jaxrs:${revSwagger}"
+    repositories {
+        maven {
+            url "https://artifactory.corp.adobe.com:443/artifactory/maven-asr-release-local"
+            credentials {
+                username = "${artifactory_user}"
+                password = "${artifactory_password}"
+            }
+        }
+    }
+    compile(group: 'com.adobe.asr', name: 'asr-starter-jersey-ims', version: '6.12.0')
 }
+// configurations {
+//     //compile.exclude group: 'com.adobe.asr'
+//     compile.exclude module: 'log4j-over-slf4j'
+// }
 
 shadowJar {
     mergeServiceFiles()

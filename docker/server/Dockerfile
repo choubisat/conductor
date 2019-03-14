@@ -9,9 +9,9 @@ MAINTAINER Netflix OSS <conductor@netflix.com>
 RUN mkdir -p /app/config /app/logs /app/libs
 
 # Copy the project directly onto the image
-COPY ./docker/server/bin /app
-COPY ./docker/server/config /app/config
-COPY ./server/build/libs/conductor-server-*-all.jar /app/libs
+COPY docker/server/bin /app
+COPY docker/server/config /app/config
+COPY server/build/libs/conductor-server-*-all.jar /app/libs
 
 # Copy the files for the server into the app folders
 RUN chmod +x /app/startup.sh

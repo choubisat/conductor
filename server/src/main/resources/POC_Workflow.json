@@ -1,0 +1,222 @@
+[
+  {
+  "name": "test_flow",
+  "description": "A Simple workflow for user tasks",
+  "version": 1,
+  "tasks": [
+    {
+      "name": "task_upload",
+      "taskReferenceName": "task_up",
+      "inputParameters": {
+        "user":"${workflow.input.user}",
+      },
+      "type": "SIMPLE"
+    },
+    {
+      "name": "task_review",
+      "taskReferenceName": "task_rv",
+      "inputParameters": {
+        "file":"${task_up.output.file}",
+      },
+      "type": "SIMPLE"
+    },
+
+  ],
+}
+]
+
+
+---------------------------------------------------------------------------------------------
+
+[{
+    "name": "kitchensink",
+    "description": "kitchensink workflow",
+    "version": 1,
+    "tasks": [
+        {
+            "name": "task_Review",
+            "taskReferenceName": "task_1",
+            "inputParameters": {
+                "mod": "${workflow.input.mod}",
+                "oddEven": "${workflow.input.oddEven}",
+                "env": {
+                    "taskId": "${CPEWF_TASK_ID}",
+                    "workflowId": "${HOSTNAME}"
+                }
+            },
+            "type": "SIMPLE",
+            "startDelay": 0,
+            "optional": false
+        },
+        {
+            "name": "event_task",
+            "taskReferenceName": "event_0",
+            "inputParameters": {
+                "mod": "${workflow.input.mod}",
+                "oddEven": "${workflow.input.oddEven}"
+            },
+            "type": "EVENT",
+            "startDelay": 0,
+            "sink": "conductor",
+            "optional": false
+        },
+        {
+            "name": "dyntask",
+            "taskReferenceName": "task_2",
+            "inputParameters": {
+                "taskToExecute": "${workflow.input.task2Name}"
+            },
+            "type": "DYNAMIC",
+            "dynamicTaskNameParam": "taskToExecute",
+            "startDelay": 0,
+            "optional": false
+        },
+        {
+            "name": "oddEvenDecision",
+            "taskReferenceName": "oddEvenDecision",
+            "inputParameters": {
+                "oddEven": "${task_2.output.oddEven}"
+            },
+            "type": "DECISION",
+            "caseValueParam": "oddEven",
+            "decisionCases": {
+                "0": [
+                    {
+                        "name": "task_4",
+                        "taskReferenceName": "task_4",
+                        "inputParameters": {
+                            "mod": "${task_2.output.mod}",
+                            "oddEven": "${task_2.output.oddEven}"
+                        },
+                        "type": "SIMPLE",
+                        "startDelay": 0,
+                        "optional": false
+                    },
+                    {
+                        "name": "dynamic_fanout",
+                        "taskReferenceName": "fanout1",
+                        "inputParameters": {
+                            "dynamicTasks": "${task_4.output.dynamicTasks}",
+                            "input": "${task_4.output.inputs}"
+                        },
+                        "type": "FORK_JOIN_DYNAMIC",
+                        "dynamicForkTasksParam": "dynamicTasks",
+                        "dynamicForkTasksInputParamName": "input",
+                        "startDelay": 0,
+                        "optional": false
+                    },
+                    {
+                        "name": "dynamic_join",
+                        "taskReferenceName": "join1",
+                        "type": "JOIN",
+                        "startDelay": 0,
+                        "optional": false
+                    }
+                ],
+                "1": [
+                    {
+                        "name": "fork_join",
+                        "taskReferenceName": "forkx",
+                        "type": "FORK_JOIN",
+                        "forkTasks": [
+                            [
+                                {
+                                    "name": "task_10",
+                                    "taskReferenceName": "task_10",
+                                    "type": "SIMPLE",
+                                    "startDelay": 0,
+                                    "optional": false
+                                },
+                                {
+                                    "name": "sub_workflow_x",
+                                    "taskReferenceName": "wf3",
+                                    "inputParameters": {
+                                        "mod": "${task_1.output.mod}",
+                                        "oddEven": "${task_1.output.oddEven}"
+                                    },
+                                    "type": "SUB_WORKFLOW",
+                                    "startDelay": 0,
+                                    "subWorkflowParam": {
+                                        "name": "sub_flow_1",
+                                        "version": 1
+                                    },
+                                    "optional": false
+                                }
+                            ],
+                            [
+                                {
+                                    "name": "task_11",
+                                    "taskReferenceName": "task_11",
+                                    "type": "SIMPLE",
+                                    "startDelay": 0,
+                                    "optional": false
+                                },
+                                {
+                                    "name": "sub_workflow_x",
+                                    "taskReferenceName": "wf4",
+                                    "inputParameters": {
+                                        "mod": "${task_1.output.mod}",
+                                        "oddEven": "${task_1.output.oddEven}"
+                                    },
+                                    "type": "SUB_WORKFLOW",
+                                    "startDelay": 0,
+                                    "subWorkflowParam": {
+                                        "name": "sub_flow_1",
+                                        "version": 1
+                                    },
+                                    "optional": false
+                                }
+                            ]
+                        ],
+                        "startDelay": 0,
+                        "optional": false
+                    },
+                    {
+                        "name": "join",
+                        "taskReferenceName": "join2",
+                        "type": "JOIN",
+                        "startDelay": 0,
+                        "joinOn": [
+                            "wf3",
+                            "wf4"
+                        ],
+                        "optional": false
+                    }
+                ]
+            },
+            "startDelay": 0,
+            "optional": false
+        },
+        {
+            "name": "search_elasticsearch",
+            "taskReferenceName": "get_es_1",
+            "inputParameters": {
+                "http_request": {
+                    "uri": "http://localhost:9200/conductor/_search?size=10",
+                    "method": "GET"
+                }
+            },
+            "type": "HTTP",
+            "startDelay": 0,
+            "optional": false
+        },
+        {
+            "name": "task_30",
+            "taskReferenceName": "task_30",
+            "inputParameters": {
+                "statuses": "${get_es_1.output..status}",
+                "workflowIds": "${get_es_1.output..workflowId}"
+            },
+            "type": "SIMPLE",
+            "startDelay": 0,
+            "optional": false
+        }
+    ],
+    "outputParameters": {
+        "statues": "${get_es_1.output..status}",
+        "workflowIds": "${get_es_1.output..workflowId}"
+    },
+    "schemaVersion": 2,
+    "restartable": true,
+    "workflowStatusListenerEnabled": false
+}]
