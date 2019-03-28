@@ -53,7 +53,30 @@ dependencies {
             }
         }
     }
-    compile(group: 'com.adobe.asr', name: 'asr-starter-jersey-ims', version: '6.12.0')
+    compile(group: 'com.adobe.asr', name: 'asr-starter-jersey-ims', version: '6.12.0') {
+        exclude group: 'org.apache.logging.log4j'
+        exclude group: 'log4j'
+        exclude group: 'org.slf4j'
+
+    }
+    compile(group: 'com.adobe.asr', name: 'asr-imsutils', version: '6.5.0') {
+        exclude group: 'org.apache.logging.log4j'
+        exclude group: 'log4j'
+        exclude group: 'org.slf4j'
+
+    }
+    compile(group: 'com.adobe.asr', name: 'connector-ims', version: '6.12.0') {
+        exclude group: 'org.apache.logging.log4j'
+        exclude group: 'log4j'
+        exclude group: 'org.slf4j'
+
+    }
+    compile(group: 'com.adobe.asr', name: 'asr-autoconfigure', version: '6.12.0') {
+        exclude group: 'org.apache.logging.log4j'
+        exclude group: 'log4j'
+        exclude group: 'org.slf4j'
+
+    }
 }
 // configurations {
 //     //compile.exclude group: 'com.adobe.asr'

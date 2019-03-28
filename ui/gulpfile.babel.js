@@ -21,150 +21,150 @@ import env from 'gulp-env';
 import config from './config';
 
 const paths = {
-  bundle: 'app.js',
-  srcJsx: 'src/app.js',
-  srcServer: 'src/server.js',
-  srcCss: 'src/**/*.css',
-  srcFonts: 'src/fonts/**',
-  srcImg: 'src/images/**',
-  srcPublic: 'src/public/**',
-  srcLint: ['src/**/*.js', 'test/**/*.js'],
-  dist: 'dist/public',
-  distDeploy: './dist/public/**/*'
+    bundle: 'app.js',
+    srcJsx: 'src/app.js',
+    srcServer: 'src/server.js',
+    srcCss: 'src/**/*.css',
+    srcFonts: 'src/fonts/**',
+    srcImg: 'src/images/**',
+    srcPublic: 'src/public/**',
+    srcLint: ['src/**/*.js', 'test/**/*.js'],
+    dist: 'dist/public',
+    distDeploy: './dist/public/**/*'
 };
 
 gulp.task('clean', cb => {
-  rimraf('dist', cb);
+    rimraf('dist', cb);
 });
 
 gulp.task('browserSync', ['serve'], () => {
-  const bundler = webpack(config[0]);
-  browserSync({
-    proxy: {
-      target: 'localhost:5000',
-      middleware: [
-        webpackDevMiddleware(bundler, {
-          publicPath: '/',
-          stats: config[0].stats
-        }),
-        webpackHotMiddleware(bundler)
-      ]
-    },
-    files: ['dist/public/**/*.css', 'dist/public/**/*.html']
-  });
+    const bundler = webpack(config[0]);
+    browserSync({
+        proxy: {
+            target: 'localhost:5000',
+            middleware: [
+                webpackDevMiddleware(bundler, {
+                    publicPath: '/',
+                    stats: config[0].stats
+                }),
+                webpackHotMiddleware(bundler)
+            ]
+        },
+        files: ['dist/public/**/*.css', 'dist/public/**/*.html']
+    });
 });
 
 const webpackConfig = {};
 
 gulp.task('serve', done => {
-  console.log(`Stats : ${JSON.stringify(config.stats)}`);
-  const bundler = webpack(config);
-  const start = () => {
-    const server = cp.fork('server.js', {
-      cwd: path.join(__dirname, './dist'),
-      env: Object.assign({ NODE_ENV: 'development' }, process.env),
-      silent: false
-    });
-    server.once('message', message => {
-      if (message.match(/^online$/)) {
-        console.log('Server is online...');
-        if (!webpackConfig.isGulpTaskDone) {
-          done();
-          webpackConfig.isGulpTaskDone = true;
+    console.log(`Stats : ${JSON.stringify(config.stats)}`);
+    const bundler = webpack(config);
+    const start = () => {
+        const server = cp.fork('server.js', {
+            cwd: path.join(__dirname, './dist'),
+            env: Object.assign({ NODE_ENV: 'development' }, process.env),
+            silent: false
+        });
+        server.once('message', message => {
+            if (message.match(/^online$/)) {
+                console.log('Server is online...');
+                if (!webpackConfig.isGulpTaskDone) {
+                    done();
+                    webpackConfig.isGulpTaskDone = true;
+                }
+            }
+        });
+        server.once('error', err => console.log(`Server startup failed ${err}`));
+        process.on('exit', () => server.kill('SIGTERM'));
+        return server;
+    };
+    const bundle = (err, stats) => {
+        if (err) {
+            console.log(`Bundle errors! ${err}`);
         }
-      }
-    });
-    server.once('error', err => console.log(`Server startup failed ${err}`));
-    process.on('exit', () => server.kill('SIGTERM'));
-    return server;
-  };
-  const bundle = (err, stats) => {
-    if (err) {
-      console.log(`Bundle errors! ${err}`);
-    }
 
-    console.log(stats.toString(config[0].stats));
-    if (!webpackConfig.serverInstance) {
-      webpackConfig.serverInstance = start();
-    } else {
-      webpackConfig.serverInstance.kill('SIGTERM');
-      webpackConfig.serverInstance = start();
-    }
-  };
-  bundler.watch(200, bundle);
+        console.log(stats.toString(config[0].stats));
+        if (!webpackConfig.serverInstance) {
+            webpackConfig.serverInstance = start();
+        } else {
+            webpackConfig.serverInstance.kill('SIGTERM');
+            webpackConfig.serverInstance = start();
+        }
+    };
+    bundler.watch(200, bundle);
 });
 
 gulp.task('server-bundle', done => {
-  webpack(config, (err, stats) => {
-    // eslint-disable-next-line no-undef
-    if (err) throw new gutil.PluginError('webpack:build', err);
-    console.log(
-      `[webpack:build]${stats.toString({
+    webpack(config, (err, stats) => {
+        // eslint-disable-next-line no-undef
+        if (err) throw new gutil.PluginError('webpack:build', err);
+        console.log(
+            `[webpack:build]${stats.toString({
         colors: true
       })}`
-    );
-    done();
-  });
+        );
+        done();
+    });
 });
 
 gulp.task('styles', () => {
-  gulp
-    .src(paths.srcCss)
-    .pipe(sourcemaps.init())
-    .pipe(postcss([vars, extend, nested, autoprefixer, cssnano]))
-    .pipe(sourcemaps.write('.'))
-    .pipe(gulp.dest(paths.dist))
-    .pipe(reload({ stream: true }));
+    gulp
+        .src(paths.srcCss)
+        .pipe(sourcemaps.init())
+        .pipe(postcss([vars, extend, nested, autoprefixer, cssnano]))
+        .pipe(sourcemaps.write('.'))
+        .pipe(gulp.dest(paths.dist))
+        .pipe(reload({ stream: true }));
 });
 
 gulp.task('public', () => {
-  gulp.src(paths.srcPublic).pipe(gulp.dest(paths.dist));
+    gulp.src(paths.srcPublic).pipe(gulp.dest(paths.dist));
 });
 
 gulp.task('fonts', () => {
-  gulp.src(paths.srcFonts).pipe(gulp.dest(`${paths.dist}/fonts`));
+    gulp.src(paths.srcFonts).pipe(gulp.dest(`${paths.dist}/fonts`));
 });
 
 gulp.task('images', () => {
-  gulp.src(paths.srcImg).pipe(gulp.dest(`${paths.dist}/images`));
+    gulp.src(paths.srcImg).pipe(gulp.dest(`${paths.dist}/images`));
 });
 
 // There are too many linting error. this needs to be disabled
 // for now. It is causing watch to fail.
 // After we fix all of the linting errors, we can enable it.
 gulp.task('lint', () => {
-  gulp
-    .src(paths.srcLint)
-    .pipe(eslint())
-    .pipe(eslint.format());
+    gulp
+        .src(paths.srcLint)
+        .pipe(eslint())
+        .pipe(eslint.format());
 });
 
 gulp.task('watchTask', () => {
-  gulp.watch(paths.srcFonts, ['fonts']);
-  gulp.watch(paths.srcCss, ['styles']);
-  gulp.watch(paths.srcPublic, ['public']);
-  paths.srcLint.forEach(src => {
-    gulp.watch(src, ['lint']);
-  });
+    gulp.watch(paths.srcFonts, ['fonts']);
+    gulp.watch(paths.srcCss, ['styles']);
+    gulp.watch(paths.srcPublic, ['public']);
+    paths.srcLint.forEach(src => {
+        gulp.watch(src, ['lint']);
+    });
 });
 
 gulp.task('deploy', () => gulp.src(paths.distDeploy).pipe(ghPages()));
 
 gulp.task('watch', cb => {
-  runSequence('clean', ['set-env', 'browserSync', 'watchTask', 'public', 'styles', 'fonts', 'images'], cb);
+    runSequence('clean', ['set-env', 'browserSync', 'watchTask', 'public', 'styles', 'fonts', 'images'], cb);
 });
 
 gulp.task('set-env', () => {
-  // Only use localhost if WF_SERVER is not set
-  const wfServer = process.env.WF_SERVER || 'http://conductor-stage-va6.stage.cloud.adobe.io/api/';
-  env({
-    vars: {
-      WF_SERVER: wfServer
-    }
-  });
+    // Only use localhost if WF_SERVER is not set
+    const wfServer = /*process.env.WF_SERVER || 'http://conductor-stage-va6.stage.cloud.adobe.io/api/'*/ 'http://localhost:8080';
+    env({
+        vars: {
+            WF_SERVER: wfServer
+        }
+    });
 });
 
 gulp.task('build', cb => {
-  process.env.DEBUG = false;
-  runSequence('clean', ['server-bundle', 'styles', 'fonts', 'public', 'images'], cb);
+    process.env.DEBUG = false;
+    runSequence('clean', ['server-bundle', 'styles', 'fonts', 'public', 'images'], cb);
 });
